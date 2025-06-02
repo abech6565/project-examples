@@ -28,4 +28,10 @@ Slides: [Credit Risk Strategy Slides](https://github.com/abech6565/project-examp
 
 Codefile: [Credit Risk Strategy Codefile](https://github.com/abech6565/project-examples/blob/main/Credit%20Risk%20Modeling/Logistic_Overview.Rmd)
 
-### Example 4 
+### Example 4 Simulation of Bond Prices with Monte Carlo Markov Chains 
+This research project demonstrated and explored the use of Monte Carlo Markov Chains in bond pricing. The project contains a research paper with a codefile. The codefile is fairly ... rudimentary. For demonstrative purposes (as part of the study), I wanted to be able to access each iteration of the chain states to show how the chain operates to several colleagues. Normally, I'd write it in a much more simplified loop. 
+
+Slides: [MCMC Bond Prices Research Paper](https://github.com/abech6565/project-examples/blob/main/Simulation%20of%20Bond%20Prices/Simulation%20of%20Bond%20Prices.pdf)
+
+Codefile: [MCMC Codefile](https://github.com/abech6565/project-examples/blob/main/Simulation%20of%20Bond%20Prices/MCMC%20Simulation%20Bond%20Prices.R)
+
