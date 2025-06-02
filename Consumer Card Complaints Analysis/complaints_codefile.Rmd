@@ -1,7 +1,6 @@
 ---
-title: 'Wells Fargo: Principal Analytics Consultant Case Study'
+title: 'Consumer Card Complaints Analysis'
 author: "Alexander K, Bechler"
-date: "December 21st, 2023"
 output:
   pdf_document: default
   html_document: default
