@@ -7,8 +7,7 @@ Most of the analyses here are completed with R, but Python analogues are availab
 
 ### Example 1: Consumer Card Complaints Analysis 
 *Text Mining, Data Frame Manipulation*
-- This project utilized text-mining techniques in R on a publicly available dataset.
---- The data contains complaints filed with the Federal Consumer Watchdog agencies for two of the largest credit card issuers in the United States.
+- This project utilized text-mining techniques in R on a publicly available dataset. The data contains complaints filed with the Federal Consumer Watchdog agencies for two of the largest credit card issuers in the United States.
 - Analyzed complaint themes using topic clustering, word correlation, and regular expressions.
 - Included visualizations and summaries to recommend strategies to a hypothetical audience. 
 
