@@ -1,0 +1,430 @@
+---
+title: "Loan Default/Lending Strategy Project
+"
+output:
+  pdf_document: default
+  html_document: default
+author: "Alexander K. Bechler"
+date: "October 2023"
+---
+
+# Key Goals of this Project:
+
+This project will use a publicly available dataset (retrieved from the UCI Machine learning repository) to walk through development of a classification model for a fictitious lending strategy for firm A. The project will take an 'existing strategy' that is assumed to already be in place and challenge it with several 'additional variables' that have become available. The project will evaluate those variables to determine if they capture incremental risk in excess of the assumed 'cost' of implementation. The project will attempt to answer several questions, namely - do these variables reduce credit losses? do they increase the amount of good loans made? And do they separate risk well? 
+
+
+# Libraries: Load in libraries required to conduct the analysis
+```{r, results = 'hide'}
+library(ggplot2)
+library(leaps)
+library(outliers)
+library(dplyr)
+library(olsrr)
+library(car)
+library(lmtest)
+library(caTools)
+library(ROCR)
+library(caret)
+
+```
+
+#Data Manipulation: Read in credit data
+
+This step will read in the credit data from the public source and name all of the variables in their datasets the appropriate names.
+
+```{r}
+df <- read.table("credit_data_1.txt", sep = ",")
+
+colnames(df) <- c(
+  "checking_status",
+  "duration",
+  "credit_history",
+  "purpose",
+  "credit_amount",
+  "savings_status",
+  "employment_length",
+  "debt_income",
+  "personal_status",
+  "other_debtors",
+  "residence_length",
+  "property",
+  "age",
+  "other_installment_loans",
+  "housing",
+  "number_of_credits",
+  "job",
+  "dependents",
+  "telephone",
+  "foreign_worker",
+  "default"
+)
+
+df$default <- ifelse(df$default == 'good', 0, 1)
+
+
+```
+
+# Split Model into testing and training data sets: 
+
+In order to develop and challenge the 'existing strategy', the dataset will need to be split into a testing and training set. The training set will be where the new model is built (and will include the bulk of the data), while the test set will used to evaluate the new model against the existing strategy.
+
+```{r}
+split <- sample.split(df, SplitRatio = 0.75, set.seed(12))
+train_df <- subset(df, split == "TRUE")
+test_df <- subset(df, split == "FALSE")
+
+```
+
+
+# Exploratory Data Analysis:
+
+Before going into what the existing strategy is, we will first conduct a (very short) exploratory data analysis with a few charts. 
+
+# 1. Duration vs. Default 
+
+
+```{r}
+boxplot(test_df$duration ~ test_df$default, names = c("No Default", "Default"), xlab ="Default", ylab = "Duration of Loan" )
+
+```
+
+Boxplot of Duration and Default -- clearly displaying that the longer the duration of the loan (in months), the higher the default likelihood. The longer a customer holds a loan, the more time they have to experience stress and default on the trade. 
+
+
+# 2. Loan Size vs. Default
+
+
+```{r}
+
+ggplot(data = test_df, aes(x = credit_amount, y = duration, colour = factor(default))) + 
+  geom_point() +
+  xlab("Size of Loan ($)") + ylab("Duration of Loan (months)") + 
+  labs(color = "Default (0 = No)") 
+
+
+```
+
+Judging from the graph, the most instances of default appear to occur on trades with a longer duration and a higher dollar amount. The strongest performing loans appear to be short duration with smaller dollar amounts. Over 50% of loans with a duration of greater than 30 months defaulted, while fewer than 15% of loans with a duration of less than a year defaulted. 
+
+
+# Existing Strategy & Model:
+
+Part of this project assumes the existence of a 'existing strategy' that we will evaluate a new model against and challenge. The 'existing strategy' will consist of the following components (variables):
+
+1. Credit Amount: The amount (in dollars) of the tradeline
+2. Credit History: A categorical variable that indicates the customer's payment history on their credit profile.
+3. Purpose: The purpose of the loan & what the recipient intends to use it for.
+4. Duration: The term (in months) of the tradeline
+5. Housing: Indicates if the recipient owns a home, is a renter, or does not have any housing costs.
+6. Residence Length: How long, measured in years, the customer has resided at their current address.
+7. Other Installment Loans: How many other installment loans the customer might have on their credit profile.
+
+
+We will build the model below as well as the predicted responses. 
+
+```{r}
+
+k1 <- glm(default ~ credit_amount + 
+            purpose + 
+            duration +
+            credit_history + 
+            housing + 
+            residence_length + 
+            other_installment_loans
+            
+          , family = "binomial", data = train_df)
+
+predict_k1 <- predict(k1, test_df, type = 'response')
+
+summary(k1)
+
+```
+
+
+# Receiver Operating Characteristic Curve: Optimize the threshold/cutoff value for predicting default. 
+
+A receiver operating characteristic curve is a graph showing the performance of a classification model at all classification thresholds, where the classification threshold is the value above which a customer will be considered to have defaulted. It will plot the true positive rate as a function of the false positive rate over time. The objective of an ROC curve is to optimize the area under the curve, so that the area represents odds that is better than a coin flip (e.g. 50%...)
+
+
+```{r}
+
+predictionROC <- prediction(predict_k1, test_df$default)
+measurement_output <- performance(predictionROC, measure = "tpr", x.measure = "fpr")
+
+plot(measurement_output, colorize = TRUE,
+     print.cutoffs.at = seq(0.1, by = 0.25),
+     main = "Existing Strategy: ROC Curve")
+abline(a = 0, b = 1)
+
+tp_fp_delta <- unlist(measurement_output@y.values) - unlist(measurement_output@x.values)
+tp_fp_delta[which.max(tp_fp_delta)]
+
+auc <- performance(predictionROC, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+k1_auc <- unlist(measurement_output@y.values)
+
+
+```
+
+The optimal threshold value for the existing strategy is 0.371 and the AUC is 0.741.
+
+
+# Input the maximized threshold value into the model
+```{r}
+test_df$k1_probability <- predict_k1 
+test_df$k1_default <- ifelse(predict_k1 > tp_fp_delta[which.max(tp_fp_delta)], 1,0)
+
+
+```
+
+# Evaluation of Existing Losses: 
+
+Confusion Matrix
+```{r}
+
+confusionMatrix(data = as.factor(test_df$k1_default), reference = as.factor(test_df$default))
+
+
+```
+
+## Performance statistics: 
+
+Overall, of the 286 test cases from our dataset the model has correctly classified 208 of them, yielding an accuracy rate of 72.7%.
+Digging deeper into the performance of the model:
++ 28 were predicted to default, but did not actually default. The strategy would have rejected 28 tradelines. that would have otherwise been a profitable relationship to the bank. 
++ 50 were predicted to not default, but actually did default. The model approved 50 tradelines that would have resulted in credit losses to the bank. 
+
+
+# Expected Gross Credit Loss Calculations: Over and Under Estimate
+1. Missed GCL
+2. Missed Revenue
+
+# 1. What was the approximate miss in gross credit losses? 
+```{r}
+
+GCL_df <-  test_df %>%
+  filter(test_df$default == 1) 
+
+GCL_df$missed_ind <- ifelse(GCL_df$k1_default == 0, 1, 0)
+GCL_df$missed_GCL <- GCL_df$missed_ind*GCL_df$credit_amount
+sum(GCL_df$missed_GCL)
+
+
+```
+
+The strategy missed approximately $204k in gross credit losses. Of the 93 tradelines in the sample that did default, we would have missed approximately 50 of them - leading to losses of $204k. 
+
+
+# 2. What would have been the approximate miss in revenue (represented as good loans that would have been tagged as bad)?
+For this, we assume a flat revenue calculation according to fair market value revenue recognition (e.g. a flat amount at the time of loan origination). We were given 25% by a finance team for the entire life of each loan.
+
+```{r}
+
+Revenue_df <- test_df %>%
+  filter(test_df$default == 0)
+
+Revenue_df$missed_ind <- ifelse(Revenue_df$k1_default == 1, 1, 0)
+Revenue_df$missed_revenue <- Revenue_df$missed_ind*Revenue_df$credit_amount*.25
+sum(Revenue_df$missed_revenue)
+
+
+```
+
+The existing strategy would have led to a missed revenue of approximately $35,000.
+
+
+## Proposing an enhancement to the existing strategy - are these new variables worth the cost? 
+
+To continue with the scenario, we are discussing implementing a strategy change to enhance our existing origination strategy. The current strategy only includes the attributes covering the amount the customer hopes to originate as well as their history of making payments (credit history). We are going to gain access to an additional three variables: checking account amount, savings account amounts, and debt to income ratio at origination. These variables would be replacements to the existing attributes of purpose, housing, residence length, and other installment loans. 
+
+It would cost approximately $10,000 a year to integrate both of these variables into our strategy. Our task is to evaluate if the cost of implementing these variables is worth any benefit we would observe in the new approvals/declines. 
+
+
+# Build the new model
+```{r}
+
+k2 <- glm(default ~ duration + 
+            credit_amount + 
+            debt_income + 
+           credit_history +
+            checking_status + 
+            savings_status
+          , family = "binomial", data = train_df)
+
+predict_k2 <- predict(k2, test_df, type = 'response')
+
+summary(k2)
+```
+
+Similar to the existing strategy, we have several significant variables in the logistic regression. Additionally, it appears that the AIC of this model is better than the existing strategy - despite it being a model with more variables. Residual deviance is also lower. Top line model quality metrics are all favorable compared to the existing strategy.
+
+Next, we will optimize the cutoff value used to define good/bad:
+
+We need to discover the best threshold value to maximize the tradeoff between true positive rates and false positive rates. 
+
+```{r}
+
+predictionROC <- prediction(predict_k2, test_df$default)
+measurement_output <- performance(predictionROC, measure = "tpr", x.measure = "fpr")
+
+plot(measurement_output, colorize = TRUE,
+     print.cutoffs.at = seq(0.1, by = 0.25),
+     main = "New Strategy: ROC Curve")
+abline(a = 0, b = 1)
+
+tp_fp_delta <- unlist(measurement_output@y.values) - unlist(measurement_output@x.values)
+tp_fp_delta[which.max(tp_fp_delta)]
+
+auc <- performance(predictionROC, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+k2_auc <- unlist(measurement_output@y.values)
+
+
+
+```
+
+The optimal cutoff (threshold) value appears to be  0.47. The AUC of this model is also 0.78, which is higher than the existing strategy's model of 0.74. 
+
+# Implement the new cutoff value:
+```{r}
+
+test_df$k2_probability <- predict_k2 
+test_df$k2_default <- ifelse(predict_k2 > tp_fp_delta[which.max(tp_fp_delta)], 1,0)
+
+
+```
+
+# Confusion Matrix
+
+```{r}
+
+confusionMatrix(data = as.factor(test_df$k2_default), reference = as.factor(test_df$default))
+
+
+```
+
+
+Model performance metrics: New Strategy (Existing Strategy)
+Accuracy: 77% (72%)
+Sensitivity: 90% (85%)
+Specificity: 49% (46%)
+
+Sensitivity: the rate of 'positives' measured correctly
+Specificity: the rate of 'negatives' measured correctly
+
+We can see a clear improvement across all measurement metrics - the new proposed strategy change clearly performs better across all measurement metrics against the existing strategy. 
+
+## Performance statistics: 
+
+Overall, of the 286 test cases from our dataset the model has correctly classified 201 of them, yielding an accuracy rate of 72.7%.
+Digging deeper into the performance of the model:
++ 19 were predicted to default, but did not actually default. The strategy would have rejected 19 tradelines. that would have otherwise been a profitable relationship to the bank. 
++ 48 were predicted to not default, but actually did default. 
+
+
+# Expected Gross Credit Loss Calculations: Over and Under Estimate
+1. Missed GCL
+2. Missed Revenue
+
+
+# 1. What was the approximate miss in gross credit losses? 
+```{r}
+
+GCL_df <-  test_df %>%
+  filter(test_df$default == 1) 
+
+GCL_df$missed_ind <- ifelse(GCL_df$k2_default == 0, 1, 0)
+GCL_df$missed_GCL <- GCL_df$missed_ind*GCL_df$credit_amount
+sum(GCL_df$missed_GCL)
+
+
+```
+
+The strategy missed approximately $162k in gross credit losses. Of the 93 loans that did default, we would have missed approximately 48 of them - leading to losses of 162k. 
+
+
+# 2. What would have been the approximate miss in revenue (represented as good loans that would have been tagged as bad)?
+For this, we assume a flat revenue calculation according to fair market value revenue recognition (e.g. a flat amount at the time of loan origination). We were given 25% by a finance team for the entire life of each loan.
+
+```{r}
+
+Revenue_df <- test_df %>%
+  filter(test_df$default == 0)
+
+Revenue_df$missed_ind <- ifelse(Revenue_df$k2_default == 1, 1, 0)
+Revenue_df$missed_revenue <- Revenue_df$missed_ind*Revenue_df$credit_amount*0.25
+sum(Revenue_df$missed_revenue)
+
+
+```
+
+The existing strategy would have led to a missed revenue of approximately $28,000 (utilizing fair market value accounting principles).
+
+
+
+# Comparison of ROC/AUC
+
+```{r}
+
+ggplot(data = NULL, aes(x = unlist(measurement_output@x.values))) + 
+  geom_line(aes(y = k1_auc, colour = "Existing Model: ROC"), size = 2 ) + 
+  geom_line(aes(y = k2_auc, color = "New Model: ROC"), size = 2) +
+  geom_abline() + 
+  xlab("False Positive Rate") + ylab("True Positive Rate") +
+  ggtitle("Model ROC Curves: Existing vs. New")+ 
+  labs(color = " ") 
+
+
+```
+Generally both models are better than a ‘random guess’ (represented by the black line).  New Model generally performs better across the entire true positive/false positive rate curve. Area under the curve (AUC) for the existing model is  0.74, while the AUC for the new model is 0.78.
+
+
+
+
+# Conclusion:
+
+The existing strategy would have led to approximately 204,000 of gross credit losses and 35,000 in missed revenue. This produces a total financial loss metric of approximately 240,000. Compare that to our new strategy option, which had 162k in gross credit losses and 28k in missed revenues (total financial loss metric of 190k). The cost of implementing these variables was 10k, bringing the total financial cost of this strategy up to 200k.
+
+By implementing this strategy, we would save approximately $42,000 in gross credit losses and $7,000 in missed revenues assuming that this sample is representative of the lending population. The test dataset had a total GCL of 418,000 - so the new strategy has a savings to GCL of approximately 10%. Implementing the strategy would reduce expected losses and increase revenues far in excess of the cost of using the new model and variables. It would be recommended to the business to implement the strategy change. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
