@@ -1,0 +1,995 @@
+---
+title: 'Wells Fargo: Principal Analytics Consultant Case Study'
+author: "Alexander K, Bechler"
+date: "December 21st, 2023"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+The primary purpose of this analysis is to address the following 5 points:
+
+1. Uncover the primary drivers of customer dissatisfaction for WF and JPMC cardholders.
+2. Differences between WF and JPMC customer complaints
+3. What approach or methodology did you use?
+4. Recommendations to improve the customer experience
+5. What additional information would be helpful to strengthen your analysis?
+
+# Initialize Libraries
+```{r}
+library(readxl)
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer)
+library(dplyr)
+library(lubridate)
+library(usmap)
+library(ggplot2)
+
+```
+
+# Read in Data and create date variables
+
+```{r}
+
+df <- read_excel("wf_data_1.xlsx")
+
+df$time_dim_nb <- as.Date(df$`Date received`) 
+
+df$month_t <- month(as.POSIXlt(df$time_dim_nb, format="%d/%m/%Y"))
+
+```
+
+# Separate Wells Fargo & JPMC data frames for analysis
+
+```{r}
+
+df_wells_fargo <- df %>%
+  filter(df$Company == "WELLS FARGO & COMPANY")
+
+df_jpmc <- df %>%
+  filter(df$Company == "JPMORGAN CHASE & CO.")
+
+```
+
+
+# Slide 1: Overall complaints: 
+
+Uncover the primary drivers of customer dissatisfaction for all cardholders.
+
+Aggregated dataset:
+```{r}
+summary_1 <- table(df$Issue)
+summary_1 <- as.data.frame(summary_1)
+colnames(summary_1) <- c("Issue", "Number of Complaints")
+summary_1
+
+```
+
+
+Complaints across time:
+
+```{r}
+
+by_month <- df %>% 
+  group_by(month_t, Issue) %>%
+  summarize(cn = n())
+by_month
+
+
+```
+
+
+# Slide 2: Comparing the top causes of dissatisfaction across both companies
+
+Comparing the two companies:
+
+```{r}
+
+summary_jpmc <- table(df_jpmc$Issue)
+summary_jpmc <- as.data.frame(summary_jpmc)
+colnames(summary_jpmc) <- c("Issue", "Number of Complaints")
+summary_jpmc
+
+
+summary_wells_fargo <- table(df_wells_fargo$Issue)
+summary_wells_fargo  <- as.data.frame(summary_wells_fargo )
+colnames(summary_wells_fargo ) <- c("Issue", "Number of Complaints")
+summary_wells_fargo 
+
+
+
+```
+
+
+Comparing the two companies, breaking down the 'other' category:
+
+```{r}
+
+df_other_wells_fargo <- df %>%
+  filter(df$Issue == "Other features, terms, or problems" & df$Company == "WELLS FARGO & COMPANY")
+
+df_other_jpmc <- df %>%
+  filter(df$Issue == "Other features, terms, or problems" & df$Company == "JPMORGAN CHASE & CO.")
+
+summary_wells_fargo <- table(df_other_wells_fargo$`Sub-issue`)
+summary_wells_fargo  <- as.data.frame(summary_wells_fargo )
+colnames(summary_wells_fargo ) <- c("Issue", "Number of Complaints")
+summary_wells_fargo 
+
+
+summary_jpmc <- table(df_other_jpmc$`Sub-issue`)
+summary_jpmc <- as.data.frame(summary_jpmc)
+colnames(summary_jpmc) <- c("Issue", "Number of Complaints")
+summary_jpmc
+```
+
+# Text Mining
+
+```{r}
+
+
+wf_corpus <- Corpus(VectorSource(df_other_wells_fargo$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+findAssocs(dtm, terms = c("balance","transfer"), corlimit = 0.6)			
+
+
+
+```
+
+```{r}
+
+
+wf_corpus <- Corpus(VectorSource(df_other_jpmc$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "chase", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+dtm_m <- as.matrix(dtm)
+# Sort by descearing value of frequency
+dtm_v <- sort(rowSums(dtm_m),decreasing=TRUE)
+dtm_d <- data.frame(word = names(dtm_v),freq=dtm_v)
+
+findAssocs(dtm, terms = c("balance","transfer"), corlimit = 0.6)			
+
+
+
+
+```
+
+# slide 3 - Fees 
+
+Wells Fargo
+```{r}
+
+df_wf_fee <- df_wells_fargo %>%
+  filter(df_wells_fargo$Issue == "Fees or interest")
+
+df_jpmc_fee <- df_jpmc %>%
+  filter(df_jpmc$Issue == "Fees or interest")
+
+
+
+summary_wells_fargo <- table(df_wf_fee$`Sub-issue`)
+summary_wells_fargo  <- as.data.frame(summary_wells_fargo )
+colnames(summary_wells_fargo ) <- c("Issue", "Number of Complaints")
+summary_wells_fargo 
+
+summary_jpmc <- table(df_jpmc_fee$`Sub-issue`)
+summary_jpmc  <- as.data.frame(summary_jpmc )
+colnames(summary_jpmc ) <- c("Issue", "Number of Complaints")
+summary_jpmc
+
+
+wf_corpus <- Corpus(VectorSource(df_wf_fee$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+findAssocs(dtm, terms = c("interest","payment", "fees", "late", "charged"), corlimit = 0.5)		
+
+
+
+```
+
+JPMC
+```{r}
+
+wf_corpus <- Corpus(VectorSource(df_jpmc_fee$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "chase", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+findAssocs(dtm, terms = c("interest","payment", "fees", "late", "charged"), corlimit = 0.5)		
+
+
+
+
+
+```
+
+
+# Improve User Experience - Slide 4
+
+# Fraud
+```{r}
+
+
+
+df_wf_fraud <- df_wells_fargo %>%
+  filter(df_wells_fargo$Issue == "Credit monitoring or identity theft protection services" | 
+           df_wells_fargo$Issue == "Problem with a credit reporting company's investigation into an existing problem" |
+           df_wells_fargo$Issue == "Problem with a purchase shown on your statement" |
+           df_wells_fargo$Issue == "Problem with fraud alerts or security freezes"
+         )
+
+wf_corpus <- Corpus(VectorSource(df_wf_fraud$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+summary_wells_fargo <- table(df_wf_fraud$`Sub-issue`)
+summary_wells_fargo  <- as.data.frame(summary_wells_fargo )
+colnames(summary_wells_fargo ) <- c("Issue", "Number of Complaints")
+summary_wells_fargo 
+
+
+df_wf_fraud2 <- df_wf_fraud %>%
+  filter(df_wf_fraud$`Sub-issue` == "Credit card company isn't resolving a dispute about a purchase on your statement")
+
+
+wf_corpus <- Corpus(VectorSource(df_wf_fraud2$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+
+findAssocs(dtm, terms = c("charges","dispute", "charge", "said", "claim"), corlimit = 0.5)			
+
+
+
+dtm_m <- as.matrix(dtm)
+# Sort by descearing value of frequency
+dtm_v <- sort(rowSums(dtm_m),decreasing=TRUE)
+dtm_d <- data.frame(word = names(dtm_v),freq=dtm_v)
+
+barplot(dtm_d[1:5,]$freq, las = 2, names.arg = dtm_d[1:5,]$word,
+        col ="lightgreen", main ="Top 5 most frequent words",
+        ylab = "Word frequencies")
+
+
+```
+
+
+# Account Opening
+```{r}
+
+df_wf_fraud <- df_wells_fargo %>%
+  filter(df_wells_fargo$Issue == "Advertising and marketing,including promotional offers" | 
+           df_wells_fargo$Issue == "Getting a credit card" 
+         )
+
+wf_corpus <- Corpus(VectorSource(df_wf_fraud$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+summary_wells_fargo <- table(df_wf_fraud$`Sub-issue`)
+summary_wells_fargo  <- as.data.frame(summary_wells_fargo )
+colnames(summary_wells_fargo ) <- c("Issue", "Number of Complaints")
+summary_wells_fargo 
+
+
+df_wf_fraud2 <- df_wf_fraud %>%
+  filter(df_wf_fraud$`Sub-issue` == "Credit card company isn't resolving a dispute about a purchase on your statement")
+
+
+wf_corpus <- Corpus(VectorSource(df_wf_fraud2$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+
+findAssocs(dtm, terms = c("application","information", "name", "number", "fraud"), corlimit = 0.5)			
+
+
+
+```
+
+
+# Fees 
+
+```{r}
+
+df_wf_fee <- df_wells_fargo %>%
+  filter(df_wells_fargo$Issue == "Fees or interest")
+
+df_jpmc_fee <- df_jpmc %>%
+  filter(df_jpmc$Issue == "Fees or interest")
+
+
+
+summary_wells_fargo <- table(df_wf_fee$`Sub-issue`)
+summary_wells_fargo  <- as.data.frame(summary_wells_fargo )
+colnames(summary_wells_fargo ) <- c("Issue", "Number of Complaints")
+summary_wells_fargo 
+
+summary_jpmc <- table(df_jpmc_fee$`Sub-issue`)
+summary_jpmc  <- as.data.frame(summary_jpmc )
+colnames(summary_jpmc ) <- c("Issue", "Number of Complaints")
+summary_jpmc
+
+
+wf_corpus <- Corpus(VectorSource(df_wf_fee$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+findAssocs(dtm, terms = c("interest","payment", "fees", "late", "charged"), corlimit = 0.5)		
+
+
+
+```
+
+```{r}
+
+wf_corpus <- Corpus(VectorSource(df_jpmc_fee$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never",
+                                              "customer"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+findAssocs(dtm, terms = c("interest","payment", "fees", "late", "charged"), corlimit = 0.5)		
+
+
+
+
+
+```
+
+
+
+
+# Word associations with complaints - JPMC and Wells Fargo (Sub issue)
+
+```{r}
+
+wf_corpus <- Corpus(VectorSource(df_wells_fargo$`Sub-issue`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never"
+                                              
+                                              )) 
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+```
+
+
+```{r}
+
+
+jpmc_corpus <- Corpus(VectorSource(df_jpmc$`Sub-issue`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+jpmc_corpus <- tm_map(jpmc_corpus, toSpace, "/")
+jpmc_corpus <- tm_map(jpmc_corpus, toSpace, "@")
+jpmc_corpus <- tm_map(jpmc_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+jpmc_corpus <- tm_map(jpmc_corpus, content_transformer(tolower))
+# Remove numbers
+jpmc_corpus <- tm_map(jpmc_corpus, removeNumbers)
+# Remove english common stopwords
+jpmc_corpus <- tm_map(jpmc_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+jpmcfcorpus <- tm_map(jpmc_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+jpmc_corpus <- tm_map(jpmc_corpus, removePunctuation)
+# Eliminate extra white spaces
+jpmc_corpus <- tm_map(jpmc_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+dtm <- TermDocumentMatrix(jpmc_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+
+```
+
+
+
+
+```{r}
+
+df_wells_fargo_other <- df_wells_fargo %>% 
+  filter(df_wells_fargo$Issue == "Other features, terms, or problems")
+
+wf_corpus <- Corpus(VectorSource(df_wells_fargo_other $`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+wf_corpus <- tm_map(wf_corpus, toSpace, "/")
+wf_corpus <- tm_map(wf_corpus, toSpace, "@")
+wf_corpus <- tm_map(wf_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+wf_corpus <- tm_map(wf_corpus, content_transformer(tolower))
+# Remove numbers
+wf_corpus <- tm_map(wf_corpus, removeNumbers)
+# Remove english common stopwords
+wf_corpus <- tm_map(wf_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+wf_corpus <- tm_map(wf_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+wf_corpus <- tm_map(wf_corpus, removePunctuation)
+# Eliminate extra white spaces
+wf_corpus <- tm_map(wf_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+wf_corpus <- tm_map(wf_corpus, removeWords, c("xxxx", "wells", "fargo", "credit", 
+                                              "card", "account", "called", "bank", 
+                                              "told", "received", "	back", "never"
+                                              
+                                              )) 
+
+
+dtm <- TermDocumentMatrix(wf_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+
+
+```
+
+```{r}
+
+
+jpmc_corpus <- Corpus(VectorSource(df_jpmc$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+jpmc_corpus <- tm_map(jpmc_corpus, toSpace, "/")
+jpmc_corpus <- tm_map(jpmc_corpus, toSpace, "@")
+jpmc_corpus <- tm_map(jpmc_corpus, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+jpmc_corpus <- tm_map(jpmc_corpus, content_transformer(tolower))
+# Remove numbers
+jpmc_corpus <- tm_map(jpmc_corpus, removeNumbers)
+# Remove english common stopwords
+jpmc_corpus <- tm_map(jpmc_corpus, removeWords, stopwords("english"))
+
+# specify your stopwords as a character vector
+jpmcfcorpus <- tm_map(jpmc_corpus, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+jpmc_corpus <- tm_map(jpmc_corpus, removePunctuation)
+# Eliminate extra white spaces
+jpmc_corpus <- tm_map(jpmc_corpus, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+dtm <- TermDocumentMatrix(jpmc_corpus)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+
+```
+
+
+```{r}
+
+df_wf_fee %>% 
+  group_by(month_t) %>%
+  summarize(cn = n())
+
+df_jpmc_fee %>% 
+  group_by(month_t, `Sub-issue`) %>%
+  summarize(cn = n())
+
+
+
+```
+
+
+
+# Top Complaint by Geography
+
+
+```{r}
+
+df_wells_fargo %>% 
+  group_by(State, `Sub-issue`) %>%
+  summarize(cn = n())
+
+
+
+```
+
+Incremental Opportunity 
+
+```{r}
+
+df_inc_wf <- df_wells_fargo %>% 
+  group_by(`Sub-issue`) %>%
+  summarize(cn = n())
+
+df_inc_jpmc <- df_jpmc %>% 
+  group_by(`Sub-issue`) %>%
+  summarize(cn = n())
+
+
+```
+
+```{r}
+library(readxl)
+
+df <- read_excel("wf_data_1.xlsx")
+
+# Load
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+
+
+docs <- Corpus(VectorSource(df$`Consumer complaint narrative`))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "/")
+docs <- tm_map(docs, toSpace, "@")
+docs <- tm_map(docs, toSpace, "\\|")
+
+
+ # Convert the text to lower case
+docs <- tm_map(docs, content_transformer(tolower))
+# Remove numbers
+docs <- tm_map(docs, removeNumbers)
+# Remove english common stopwords
+docs <- tm_map(docs, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+docs <- tm_map(docs, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+docs <- tm_map(docs, removePunctuation)
+# Eliminate extra white spaces
+docs <- tm_map(docs, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+
+
+
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 100)
+
+
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+
+
+findAssocs(dtm, terms = "unexpectedly", corlimit = 0.3)
+
+barplot(d[1:10,]$freq, las = 2, names.arg = d[1:10,]$word,
+        col ="lightblue", main ="Most frequent words",
+        ylab = "Word frequencies")
+
+
+```
+
+
+# Servicemember
+
+```{r}
+
+df_wf_fraud <- df_wells_fargo %>%
+  filter(df_wells_fargo$Issue == "Credit monitoring or identity theft protection services" | 
+           df_wells_fargo$Issue == "Problem with a credit reporting company's investigation into an existing problem" |
+           df_wells_fargo$Issue == "Problem with a purchase shown on your statement" |
+           df_wells_fargo$Issue == "Problem with fraud alerts or security freezes"
+         )
+
+
+df_jpmc_fraud <- df_jpmc %>%
+  filter(df_jpmc$Issue == "Credit monitoring or identity theft protection services" | 
+           df_jpmc$Issue == "Problem with a credit reporting company's investigation into an existing problem" |
+           df_jpmc$Issue == "Problem with a purchase shown on your statement" |
+           df_jpmc$Issue == "Problem with fraud alerts or security freezes"
+         )
+
+
+df_jpmc_fraud %>% 
+  group_by(Tags) %>%
+  summarize(cn = n())
+
+df_wf_fraud %>% 
+  group_by(Tags) %>%
+  summarize(cn = n())
+
+
+
+
+
+
+
+```
+
+
