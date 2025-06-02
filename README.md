@@ -35,3 +35,8 @@ Slides: [MCMC Bond Prices Research Paper](https://github.com/abech6565/project-e
 
 Codefile: [MCMC Codefile](https://github.com/abech6565/project-examples/blob/main/Simulation%20of%20Bond%20Prices/MCMC%20Simulation%20Bond%20Prices.R)
 
+### Example 5: Three Statement Financial Model for $SLM Stock
+This file contains a three-statement (excel-based) forecast for $SLM. It contains a forecast for the Balance Sheet, Income Statement, and Statement of Cash flows as well as commonly accepted metrics. 
+
+Working File: [Three Statement Model](https://github.com/abech6565/project-examples/blob/main/Financial%20Modeling/SLM%20Three%20Statement%20Model.xlsx)
+
