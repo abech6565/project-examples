@@ -11,3 +11,13 @@ This project utilized text-mining techniques in R on a publicly available datase
 Slides: [Consumer Card Complaints Slides](Consumer%20Card%20Complaints%20Analysis/complaints_slides.pdf)
 
 Codefile: [Consumer Card Complaints Code](https://github.com/abech6565/project-examples/blob/main/Consumer%20Card%20Complaints%20Analysis/complaints_codefile.Rmd)
+
+## Example 2: Applying Advanced Analytics to Credit Risk Modeling
+This project took another publicly available dataset and compared baseline modeling methods with ensemble techniques. The data used is for a mortgage portfolio and covers roughly 50,000 loans over a 10+ year time frame. The analysis built several statistical models, performed variable selection and hyperparameter tuning, and analyzed/compared their results. A powerpoint, written analysis, and codefile are provided.
+
+Research Paper: [Applying Advanced Analytics to Credit Risk Modeling: Research Paper](https://github.com/abech6565/project-examples/blob/main/Credit%20Risk%20Modeling/Applying%20Advanced%20Analytics%20to%20Credit%20Risk%20Modeling.pdf)
+
+Slides: [Applying Advanced Analytics to Credit Risk Modeling: Slides](https://github.com/abech6565/project-examples/blob/main/Credit%20Risk%20Modeling/Applying%20Advanced%20Analytics%20to%20Credit%20Risk%20Modeling_slides.pdf)
+
+Codefile: [Applying Advanced Analytics to Credit Risk Modeling: Codefile](https://github.com/abech6565/project-examples/blob/main/Credit%20Risk%20Modeling/Applying%20Advanced%20Analytics%20to%20Credit%20Risk.R)
+
