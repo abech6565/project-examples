@@ -1,4 +1,4 @@
-## Project Examples
+# Project Examples
 Portfolio of various analytics, modeling, and data science projects. 
 
 Each project contains a codefile and a presentation specifically identified to showcase different analytical abilities. 
@@ -28,4 +28,4 @@ Slides: [Credit Risk Strategy Slides](https://github.com/abech6565/project-examp
 
 Codefile: [Credit Risk Strategy Codefile](https://github.com/abech6565/project-examples/blob/main/Credit%20Risk%20Modeling/Logistic_Overview.Rmd)
 
-# Example 4 
+### Example 4 
